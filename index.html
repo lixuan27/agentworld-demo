@@ -95,6 +95,11 @@ places <b>77% of 1,024 players</b> exactly right in one step — a 128× populat
 extrapolation with no cliff.</p>
 
 <h2>4 · Honest numbers, including the failure</h2>
+<p>Final-recipe headline (3 random seeds, matched cells vs the faithful reproduction):
+position accuracy <b>0.845 ± 0.009</b> (baseline 0.700), death Event-F1
+<b>0.747 ± 0.039</b> (baseline 0.329), and single-step joint-contradiction rate
+<b>exactly zero</b> on every cell — the curriculum solved one-step joint coherence.
+Long-horizon cumulative contradictions on mid-size arenas remain the stated open frontier.</p>
 <div class="card">
 <p><b class="ok">The defect we set out to show is real.</b> With per-player position accuracy at
 1.000, the assembled state still contradicts itself on 17–50% of ticks (two players on one
@@ -165,13 +170,21 @@ tests whether it can be repaired outright.</p>
 
 <h2>7 · Typed state vs dense carrier, like for like</h2>
 <p>MASS's strongest non-typed baseline is a dense per-cell U-Net (B-UN). We reproduced it
-at 3.4M parameters on the same corpus and budget. It is genuinely strong at
-<i>identity-free</i> occupancy (position-multiset F1 0.80–0.83 at H=128) — far above its
-Snake counterpart — but it structurally cannot say <i>which</i> player is where, cannot
-represent off-board state (respawn timers, cooldowns), and its death-event F1 (0.07–0.40)
-is 4–8× below the typed engine's. One honest methodological note: identity-aware and
-identity-free position metrics are different questions, so the typed model is being
-re-scored on the dense model's own metric before the final table ships.</p>
+at 3.4M parameters on the same corpus and budget, then — unlike the original — scored both
+carriers on <b>the same identity-free metric</b> (position-multiset F1). The result is an
+honest split verdict:</p>
+<table>
+<tr><th></th><th>H=32</th><th>H=128</th><th>death Event-F1</th><th>identity (X-view)</th></tr>
+<tr><td>typed engine (5.3M)</td><td>0.89–0.92</td><td>0.36–0.39</td><td><b>0.41–0.83</b></td><td><b>yes</b></td></tr>
+<tr><td>dense U-Net (3.4M)</td><td><b>0.90–0.96</b></td><td><b>0.80–0.83</b></td><td>0.07–0.40</td><td>structurally impossible</td></tr>
+</table>
+<p><b>At long horizon the dense carrier wins raw occupancy</b> — typed autoregressive errors
+accumulate as identity displacement, while dense predicts each cell independently so the
+pattern stays put. But the typed carrier keeps everything a multiplayer <i>server</i>
+actually needs and dense structurally cannot have: per-player identity, events, off-board
+state (respawn timers, cooldowns), and addressable queries. The original paper's Snake
+numbers (dense Pos = 0.002) undersold this baseline badly; our table reports what each
+carrier is genuinely good at.</p>
 
 <h2>8 · Play inside the model — multiplayer</h2>
 <p>The live demo is a FastAPI + WebSocket server on a GPU node. <b>Every browser that connects
