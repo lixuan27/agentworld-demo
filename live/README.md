@@ -11,6 +11,10 @@ ssh -L 8777:<node>:8777 <cluster-login-host>
 # then open http://localhost:8777
 ```
 
+**Multiplayer:** every browser that opens the page claims its own player slot
+(teams auto-balanced; extra visitors become spectators). Each person tunnels the
+same port and simply opens the URL — no accounts, no setup.
+
 Controls: `WASD` move · `Q/E` turn · `J` wide beam · `K` long beam.
 Toggles: learned/teacher renderer, flat/iso theme, shadow engine on/off,
 world size (official 23×23 Melting Pot arena … 72×72) and player count.

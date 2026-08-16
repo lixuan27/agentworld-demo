@@ -108,11 +108,13 @@ the tie-break information was already in each record's context window — the re
 a <i>utilisation</i> failure, which training emphasis and on-policy correction target instead.</p>
 </div>
 
-<h2>5 · Play inside the model</h2>
-<p>The live demo is a FastAPI + WebSocket server on a GPU node: you drive one player with the
-keyboard, scripted policies drive the rest, and the <b>learned model advances the world</b> —
-with an optional shadow engine (same actions, same randomness) so the live divergence between
-learned dynamics and ground-truth physics is visible while you play.</p>
+<h2>5 · Play inside the model — multiplayer</h2>
+<p>The live demo is a FastAPI + WebSocket server on a GPU node. <b>Every browser that connects
+claims its own player</b> (teams auto-balanced); all human keypresses merge into one joint
+action, the <b>learned model advances the world once per tick</b>, and every seated player's
+camera is decoded from that single prediction in one batched renderer pass — the
+many-views-one-state contract, live. An optional shadow engine (same actions, same randomness)
+shows the divergence between learned dynamics and ground-truth physics while you play.</p>
 <pre># on the cluster
 sbatch slurm/demo_server.sbatch          # prints node + port in the log
 # on your laptop

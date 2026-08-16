@@ -74,6 +74,8 @@ No game engine runs in the primary world. <span id="status">connecting…</span>
         <span class="k">model latency</span><span id="h_ms">–</span>
         <span class="k">score</span><span><b class="red" id="h_sr">0</b> : <b class="blue" id="h_sb">0</b></span>
         <span class="k">alive</span><span id="h_alive">–</span>
+        <span class="k">humans playing</span><span id="h_humans">–</span>
+        <span class="k">your seat</span><span id="h_seat">–</span>
         <span class="k">your hp</span><span id="h_hp">–</span>
         <span class="k">red flag</span><span id="h_fr">–</span>
         <span class="k">blue flag</span><span id="h_fb">–</span>
@@ -124,7 +126,16 @@ function connect(){
     $("h_ms").textContent = h.infer_ms + " ms";
     $("h_sr").textContent = h.score[0]; $("h_sb").textContent = h.score[1];
     $("h_alive").textContent = h.alive + " / " + h.n;
-    $("h_hp").textContent = h.you_alive ? "♥".repeat(h.hp) : "respawning…";
+    $("h_humans").textContent = h.humans !== undefined ? h.humans : "–";
+    const me = f.me || {};
+    if (me.slot !== undefined && me.slot >= 0){
+      const team = me.team === 0 ? "red" : "blue";
+      $("h_seat").innerHTML = `P${me.slot} <span class="${team}">■ ${team}</span>`;
+      $("h_hp").textContent = me.alive ? "♥".repeat(me.hp || 0) : "respawning…";
+    } else {
+      $("h_seat").textContent = "spectator";
+      $("h_hp").textContent = "–";
+    }
     $("h_fr").textContent = h.flag_r; $("h_fb").textContent = h.flag_b;
     const bad = h.jcr && h.jcr.length;
     $("h_jcr").innerHTML = bad ? `<span class="warn">✗ ${h.jcr.join(",")}</span>`
