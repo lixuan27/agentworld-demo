@@ -115,7 +115,33 @@ zero install. Connect it to a tunnelled world-model server and the same page swi
 <i>playing inside the learned model</i>, multiplayer.</p>
 </div>
 
-<h2>5 · Play inside the model — multiplayer</h2>
+
+<h2>5 · One model, two games — and better at both</h2>
+<p>MASS trains a <i>separate</i> tokenizer, embedding table and weight set per game. We appended
+one opt-in <code>GAME</code> token to the record schema and trained a single 5.3M-parameter
+model on <b>CaptureTheFlag + KingOfTheHill jointly</b> (same arenas, different objective and
+scoring dynamics). The multi-game model does not merely hold both rule sets — it beats the
+single-game baseline <b>at the baseline's own game</b>, on every paired cell:</p>
+<table>
+<tr><th>CTF, paired vs single-game baseline</th><th>baseline</th><th>multi-game</th></tr>
+<tr><td>full-state exact, H=1 (sm 40×40, 8 players)</td><td>0.500</td><td><b>1.000</b></td></tr>
+<tr><td>position acc, H=32 (xs 24×24)</td><td>0.576</td><td><b>0.951</b></td></tr>
+<tr><td>position acc, H=32 (sm 40×40)</td><td>0.700</td><td><b>0.906</b></td></tr>
+<tr><td>position acc, H=32 (md 72×72)</td><td>0.783</td><td><b>0.904</b></td></tr>
+<tr><td>joint-contradiction rate, H=32 (md 72×40)</td><td>0.148</td><td><b>0.000</b></td></tr>
+<tr><td>position acc, H=128 (sm 40×40)</td><td>0.223</td><td><b>0.404</b></td></tr>
+</table>
+<p>On its second game the same checkpoint holds the official 23×23 arena for
+<b>128 autoregressive ticks at position accuracy 0.810</b> — the best long-horizon number in
+the project — and extrapolates to populations it never saw (trained at N ≤ 8; position accuracy
+0.98–1.00 at N = 32, 0.982 at N = 64). Positive transfer across games is a capability the
+per-game-weights design of the original cannot express.
+<span class="dim">Open weakness, kept honest: cumulative joint-contradiction rate over very
+long horizons (H = 128) remains the frontier.</span></p>
+<p>The live server below now runs this multi-game checkpoint: pick a KotH world in the
+world selector and you are playing King of the Hill <i>inside the learned model</i>.</p>
+
+<h2>6 · Play inside the model — multiplayer</h2>
 <p>The live demo is a FastAPI + WebSocket server on a GPU node. <b>Every browser that connects
 claims its own player</b> (teams auto-balanced); all human keypresses merge into one joint
 action, the <b>learned model advances the world once per tick</b>, and every seated player's
@@ -128,9 +154,9 @@ sbatch slurm/demo_server.sbatch          # prints node + port in the log
 ssh -L 8777:&lt;node&gt;:8777 &lt;cluster&gt;         # then open http://localhost:8777</pre>
 <img src="assets/themeswap_still.png" alt="four-way render of one predicted state">
 <p class="cap">WASD move · Q/E turn · J wide beam · K long beam. Worlds from the official
-23×23 Melting Pot arena up to 72×72; per-tick model latency ≈ 250 ms on one H200.</p>
+23×23 Melting Pot arena up to 72×72; per-tick model latency 0.25–0.5 s on one (shared) H200. World selector includes both CTF and King-of-the-Hill arenas.</p>
 
-<h2>6 · Method in one paragraph</h2>
+<h2>7 · Method in one paragraph</h2>
 <p>A schema declares typed records (players, flags, 8×8 terrain chunks, global). Each tick,
 a decoder-only Transformer (width 256, 6 layers) predicts every record's next state from its
 own fields, a local context window that includes visible agents' <i>actions and tie-break
