@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ARBITER · SkirmishCTF — play inside the world model</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --bg:#0e1016; --panel:#161a24; --edge:#242a38; --ink:#d2d6e0; --dim:#8a90a0;
+    --red:#ff5566; --blue:#55aaff; --gold:#ffc478; --ok:#78fa96; --warn:#fa6060;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  body{background:var(--bg); color:var(--ink);
+       font:14px/1.45 "SF Mono","JetBrains Mono",Consolas,monospace; padding:14px}
+  h1{font-size:17px; letter-spacing:.4px; margin-bottom:2px}
+  h1 b{color:var(--gold)}
+  .sub{color:var(--dim); font-size:12px; margin-bottom:12px}
+  .wrap{display:flex; gap:14px; flex-wrap:wrap; align-items:flex-start}
+  .card{background:var(--panel); border:1px solid var(--edge); border-radius:8px; padding:10px}
+  .card h2{font-size:11px; color:var(--dim); text-transform:uppercase;
+           letter-spacing:1px; margin-bottom:6px}
+  .card h2 .tag{color:var(--gold)}
+  canvas,img.pane{image-rendering:pixelated; display:block; border-radius:4px; background:#000}
+  .row{display:flex; gap:14px; flex-wrap:wrap}
+  .hud{display:grid; grid-template-columns:auto auto; gap:3px 14px; font-size:13px; min-width:230px}
+  .hud .k{color:var(--dim)}
+  .hud .red{color:var(--red)} .hud .blue{color:var(--blue)}
+  .hud .ok{color:var(--ok)} .hud .warn{color:var(--warn)}
+  .keys{margin-top:10px; font-size:12px; color:var(--dim); line-height:1.9}
+  kbd{background:#20263a; border:1px solid #323a52; border-bottom-width:2px;
+      border-radius:4px; padding:1px 6px; color:var(--ink); font-size:11px}
+  .btns{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap}
+  button,select{background:#20263a; color:var(--ink); border:1px solid #323a52;
+      border-radius:5px; padding:5px 10px; font:inherit; font-size:12px; cursor:pointer}
+  button:hover{border-color:var(--gold)}
+  button.on{border-color:var(--gold); color:var(--gold)}
+  #status{font-size:12px; margin-left:6px}
+  .divnote{font-size:11px; color:var(--dim); max-width:250px; margin-top:8px}
+  #agreebar{height:6px; border-radius:3px; background:#20263a; overflow:hidden; margin-top:3px}
+  #agreefill{height:100%; width:100%; background:var(--ok); transition:width .2s}
+</style>
+</head>
+<body>
+<h1><b>ARBITER · SkirmishCTF</b> — you are playing <i>inside the world model</i></h1>
+<div class="sub">Every tick the 5.3M-parameter Logic Engine predicts the entire next world
+state from (state, joint actions); your views are decoded from that single prediction.
+No game engine runs in the primary world. <span id="status">connecting…</span></div>
+
+<div class="wrap">
+  <div class="card">
+    <h2>learned world <span class="tag">(the model — this is what you play in)</span></h2>
+    <img id="spec_l" class="pane" width="460">
+  </div>
+  <div class="card" id="engcard">
+    <h2>shadow engine <span class="tag">(ground-truth physics, same actions)</span></h2>
+    <img id="spec_e" class="pane" width="460">
+    <div class="divnote">Same joint actions and randomness feed both worlds; watching them
+    drift apart is the honest live measurement of model error.
+    <div id="agreebar"><div id="agreefill"></div></div>
+    <span id="agreetxt"></span></div>
+  </div>
+  <div>
+    <div class="card">
+      <h2>your camera · <span id="povtheme" class="tag">iso</span></h2>
+      <div class="row">
+        <div><div style="font-size:10px;color:var(--dim)">teacher</div><img id="pov_t" class="pane"></div>
+        <div><div style="font-size:10px;color:var(--dim)">learned renderer</div><img id="pov_l" class="pane"></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h2>state (authoritative)</h2>
+      <div class="hud">
+        <span class="k">tick</span><span id="h_tick">–</span>
+        <span class="k">model latency</span><span id="h_ms">–</span>
+        <span class="k">score</span><span><b class="red" id="h_sr">0</b> : <b class="blue" id="h_sb">0</b></span>
+        <span class="k">alive</span><span id="h_alive">–</span>
+        <span class="k">your hp</span><span id="h_hp">–</span>
+        <span class="k">red flag</span><span id="h_fr">–</span>
+        <span class="k">blue flag</span><span id="h_fb">–</span>
+        <span class="k">state coherent</span><span id="h_jcr">–</span>
+      </div>
+      <div class="keys">
+        <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move ·
+        <kbd>Q</kbd><kbd>E</kbd> turn ·
+        <kbd>J</kbd> wide beam · <kbd>K</kbd> long beam
+      </div>
+      <div class="btns">
+        <button id="b_theme">theme: iso</button>
+        <button id="b_lr" class="on">learned renderer</button>
+        <button id="b_shadow" class="on">shadow engine</button>
+        <select id="sel_world">
+          <option value="official">official 23×23 (Melting Pot)</option>
+          <option value="sm">sm 40×40</option>
+          <option value="xs">xs 24×24</option>
+          <option value="md">md 72×72</option>
+        </select>
+        <select id="sel_n">
+          <option>4</option><option selected>8</option><option>16</option><option>24</option>
+        </select>
+        <button id="b_reset">new world</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let ws, mode = {shadow:true, learned_render:true, theme:"iso"};
+
+function connect(){
+  ws = new WebSocket((location.protocol==="https:"?"wss://":"ws://")+location.host+"/ws");
+  ws.onopen = () => $("status").textContent = "● live";
+  ws.onclose = () => { $("status").textContent = "○ reconnecting…"; setTimeout(connect, 1500); };
+  ws.onmessage = ev => {
+    const f = JSON.parse(ev.data);
+    if (f.error){ $("status").textContent = "⚠ " + f.error; return; }
+    const p = f.panes, h = f.hud;
+    if (p.spec_learnedworld) $("spec_l").src = "data:image/jpeg;base64,"+p.spec_learnedworld;
+    if (p.spec_engineworld)  $("spec_e").src = "data:image/jpeg;base64,"+p.spec_engineworld;
+    $("engcard").style.display = p.spec_engineworld ? "" : "none";
+    if (p.pov_teacher) $("pov_t").src = "data:image/jpeg;base64,"+p.pov_teacher;
+    if (p.pov_learned) $("pov_l").src = "data:image/jpeg;base64,"+p.pov_learned;
+    $("h_tick").textContent = h.tick;
+    $("h_ms").textContent = h.infer_ms + " ms";
+    $("h_sr").textContent = h.score[0]; $("h_sb").textContent = h.score[1];
+    $("h_alive").textContent = h.alive + " / " + h.n;
+    $("h_hp").textContent = h.you_alive ? "♥".repeat(h.hp) : "respawning…";
+    $("h_fr").textContent = h.flag_r; $("h_fb").textContent = h.flag_b;
+    const bad = h.jcr && h.jcr.length;
+    $("h_jcr").innerHTML = bad ? `<span class="warn">✗ ${h.jcr.join(",")}</span>`
+                               : `<span class="ok">✓ all invariants hold</span>`;
+    if (h.pos_agree !== undefined){
+      $("agreefill").style.width = (h.pos_agree*100)+"%";
+      $("agreefill").style.background = h.pos_agree>0.8?"var(--ok)":h.pos_agree>0.5?"var(--gold)":"var(--warn)";
+      $("agreetxt").textContent = "position agreement vs engine: "+(h.pos_agree*100).toFixed(0)+"%";
+    }
+    $("povtheme").textContent = h.mode.theme;
+  };
+}
+connect();
+
+const KEYMAP = {w:"fwd", s:"back", a:"strafeL", d:"strafeR",
+                q:"turnL", e:"turnR", j:"fireA", k:"fireB", " ":"fireA",
+                arrowup:"fwd", arrowdown:"back", arrowleft:"strafeL", arrowright:"strafeR"};
+document.addEventListener("keydown", ev => {
+  const a = KEYMAP[ev.key.toLowerCase()];
+  if (a && ws && ws.readyState === 1){
+    ws.send(JSON.stringify({type:"action", name:a}));
+    ev.preventDefault();
+  }
+});
+
+function sendMode(){ ws.send(JSON.stringify({type:"mode", ...mode})); }
+$("b_theme").onclick = () => { mode.theme = mode.theme==="iso"?"flat":"iso";
+  $("b_theme").textContent = "theme: "+mode.theme; sendMode(); };
+$("b_lr").onclick = () => { mode.learned_render = !mode.learned_render;
+  $("b_lr").classList.toggle("on"); sendMode(); };
+$("b_shadow").onclick = () => { mode.shadow = !mode.shadow;
+  $("b_shadow").classList.toggle("on"); sendMode(); };
+$("b_reset").onclick = () =>
+  ws.send(JSON.stringify({type:"reset", world:$("sel_world").value, n:+$("sel_n").value}));
+</script>
+</body>
+</html>
