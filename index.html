@@ -141,7 +141,39 @@ long horizons (H = 128) remains the frontier.</span></p>
 <p>The live server below now runs this multi-game checkpoint: pick a KotH world in the
 world selector and you are playing King of the Hill <i>inside the learned model</i>.</p>
 
-<h2>6 · Play inside the model — multiplayer</h2>
+
+<h2>6 · What scale buys — and what it doesn't</h2>
+<p>We ran the scaling ablation MASS never did: 5× the training steps (20k → 100k) and
+3.5× the parameters (5.3M → 18.5M), on matched evaluation cells.</p>
+<table>
+<tr><th>metric (matched-cell mean)</th><th>20k base</th><th>100k steps</th><th>18.5M params</th></tr>
+<tr><td>position accuracy</td><td>0.700</td><td>0.770</td><td><b>0.789</b></td></tr>
+<tr><td>death Event-F1</td><td>0.329</td><td><b>0.593</b></td><td>0.560</td></tr>
+<tr><td>paint IoU</td><td>0.838</td><td>0.891</td><td><b>0.895</b></td></tr>
+<tr><td>joint-contradiction rate ↓</td><td><b>0.201</b></td><td>0.251</td><td>0.229</td></tr>
+</table>
+<p><b>Scale buys in-distribution accuracy but does not repair joint coherence</b> — the
+contradiction rate gets <i>worse</i>. The only intervention that fixed it is the
+interaction-structured sampling curriculum (previous section). That closes the loop on the
+headline claim: the mean-field defect is not a capacity or data-budget problem.</p>
+<p><b class="warn">And a negative surprise we report in full:</b> long training collapses
+extreme population extrapolation. Trained at ≤8 players and tested at 1024, the 20k model
+still answers 77% of positions at H=1; the 100k models drop to 27–36%. The multi-game
+curriculum recovers a large part of it (45.1%) while also being best in-distribution —
+a genuine trade-off, not a free lunch, and the population-diverse training arm now running
+tests whether it can be repaired outright.</p>
+
+<h2>7 · Typed state vs dense carrier, like for like</h2>
+<p>MASS's strongest non-typed baseline is a dense per-cell U-Net (B-UN). We reproduced it
+at 3.4M parameters on the same corpus and budget. It is genuinely strong at
+<i>identity-free</i> occupancy (position-multiset F1 0.80–0.83 at H=128) — far above its
+Snake counterpart — but it structurally cannot say <i>which</i> player is where, cannot
+represent off-board state (respawn timers, cooldowns), and its death-event F1 (0.07–0.40)
+is 4–8× below the typed engine's. One honest methodological note: identity-aware and
+identity-free position metrics are different questions, so the typed model is being
+re-scored on the dense model's own metric before the final table ships.</p>
+
+<h2>8 · Play inside the model — multiplayer</h2>
 <p>The live demo is a FastAPI + WebSocket server on a GPU node. <b>Every browser that connects
 claims its own player</b> (teams auto-balanced); all human keypresses merge into one joint
 action, the <b>learned model advances the world once per tick</b>, and every seated player's
@@ -153,10 +185,10 @@ sbatch slurm/demo_server.sbatch          # prints node + port in the log
 # on your laptop
 ssh -L 8777:&lt;node&gt;:8777 &lt;cluster&gt;         # then open http://localhost:8777</pre>
 <img src="assets/themeswap_still.png" alt="four-way render of one predicted state">
-<p class="cap">WASD move · Q/E turn · J wide beam · K long beam. Worlds from the official
-23×23 Melting Pot arena up to 72×72; per-tick model latency 0.25–0.5 s on one (shared) H200. World selector includes both CTF and King-of-the-Hill arenas.</p>
+<p class="cap">WASD move · Q/E turn · J wide beam · K long beam · touch controls on mobile · live event feed (eliminations, flag steals, scoring) derived from the model's own state deltas. Worlds from the official
+23×23 Melting Pot arena up to 72×72; per-tick model latency 0.25–0.5 s on one (shared) H200. World selector includes CTF, King-of-the-Hill, and the new <b>Nomad</b> rule set — a moving hill whose position and hold-counter are part of the typed state itself, so the model must predict the evolution of the <i>rules' state</i>, not just the pieces (multi-game brain for Nomad currently training).</p>
 
-<h2>7 · Method in one paragraph</h2>
+<h2>9 · Method in one paragraph</h2>
 <p>A schema declares typed records (players, flags, 8×8 terrain chunks, global). Each tick,
 a decoder-only Transformer (width 256, 6 layers) predicts every record's next state from its
 own fields, a local context window that includes visible agents' <i>actions and tie-break
