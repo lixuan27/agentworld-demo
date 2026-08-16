@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Play · ARBITER SkirmishCTF</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{--bg:#0e1016;--panel:#161a24;--edge:#242a38;--ink:#d6dae4;--dim:#8a90a0;
+      --red:#ff5566;--blue:#55aaff;--gold:#ffc478;--ok:#78fa96}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);
+     font:14px/1.5 ui-monospace,"SF Mono",Consolas,monospace;padding:16px}
+h1{font-size:17px}h1 b{color:var(--gold)}
+.sub{color:var(--dim);font-size:12px;margin:4px 0 12px;max-width:86ch}
+.wrap{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
+.card{background:var(--panel);border:1px solid var(--edge);border-radius:8px;padding:10px}
+.card h2{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+canvas{image-rendering:pixelated;border-radius:4px;background:#000;display:block}
+.hud{display:grid;grid-template-columns:auto auto;gap:2px 12px;font-size:13px;min-width:210px}
+.hud .k{color:var(--dim)}.red{color:var(--red)}.blue{color:var(--blue)}
+kbd{background:#20263a;border:1px solid #323a52;border-bottom-width:2px;border-radius:4px;
+    padding:0 5px;font-size:11px}
+.keys{font-size:12px;color:var(--dim);margin-top:8px;line-height:1.9}
+button,input{background:#20263a;color:var(--ink);border:1px solid #323a52;border-radius:5px;
+    padding:5px 9px;font:inherit;font-size:12px}
+button{cursor:pointer}button:hover{border-color:var(--gold)}
+.note{font-size:11.5px;color:var(--dim);max-width:260px;line-height:1.55;margin-top:8px}
+a{color:var(--blue)}
+</style>
+</head>
+<body>
+<h1><b>SkirmishCTF</b> — play it right here</h1>
+<p class="sub">This page runs a faithful JavaScript port of the <b>ground-truth environment</b>
+(the physics the world model was trained to imitate) — zero install, playable now. To play
+<i>inside the learned model itself</i>, run the cluster server and point this page at your
+tunnel (box below): the primary world is then advanced only by the 5.3M Logic Engine.</p>
+
+<div class="wrap">
+  <div class="card">
+    <h2 id="modelabel">local engine (ground-truth physics)</h2>
+    <canvas id="cv" width="368" height="368"></canvas>
+  </div>
+  <div>
+    <div class="card">
+      <h2>state</h2>
+      <div class="hud">
+        <span class="k">tick</span><span id="h_tick">0</span>
+        <span class="k">score</span><span><b class="red" id="h_sr">0</b> : <b class="blue" id="h_sb">0</b></span>
+        <span class="k">you</span><span id="h_me">–</span>
+        <span class="k">hp</span><span id="h_hp">–</span>
+        <span class="k">red flag</span><span id="h_fr">base</span>
+        <span class="k">blue flag</span><span id="h_fb">base</span>
+      </div>
+      <div class="keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move ·
+        <kbd>Q</kbd><kbd>E</kbd> turn · <kbd>J</kbd> wide beam · <kbd>K</kbd> long beam</div>
+      <div style="margin-top:10px"><button id="b_reset">restart</button></div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <h2>connect to the world-model server</h2>
+      <input id="ws_url" value="ws://localhost:8777/ws" size="24">
+      <button id="b_conn">connect</button>
+      <div class="note">Needs the cluster server + an SSH tunnel
+      (<a href="live/">instructions</a>). Once connected this page hands control to the
+      learned model: every browser gets its own player seat.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ---------- faithful JS port of the SkirmishCTF rules (engine.py) ---------- */
+const MAP = `IIIIIIIIIIIIIIIIIIIIIII
+IWWWWWWWWWWWWWWWWWWWWWI
+IWPPP,PPPP,F,PPPP,PPPWI
+IWPPP,,PP,,,,,PP,,PPPWI
+IWPPP,,,,,,,,,,,,,PPPWI
+IWP,,WW,,,,,,,,,WW,,PWI
+IWHHWWW,WWWWWWW,WWWHHWI
+IWHHW,D,,,,,,,,,D,WHHWI
+IWHH,,W,,,WWW,,,W,,HHWI
+IW,,,,W,,,,,,,,,W,,,,WI
+IW,,,,WWW,,,,,WWW,,,,WI
+IW,,,,,,,,,I,,,,,,,,,WI
+IW,,,,WWW,,,,,WWW,,,,WI
+IW,,,,W,,,,,,,,,W,,,,WI
+IWHH,,W,,,WWW,,,W,,HHWI
+IWHHW,D,,,,,,,,,D,WHHWI
+IWHHWWW,WWWWWWW,WWWHHWI
+IWQ,,WW,,,,,,,,,WW,,QWI
+IWQQQ,,,,,,,,,,,,,QQQWI
+IWQQQ,,QQ,,,,,QQ,,QQQWI
+IWQQQ,QQQQ,G,QQQQ,QQQWI
+IWWWWWWWWWWWWWWWWWWWWWI
+IIIIIIIIIIIIIIIIIIIIIII`;
+const W=23,H=23,TILE=16,NP=8,RED=0,BLUE=1;
+const DX=[0,1,0,-1],DY=[-1,0,1,0];   // N E S W
+const NOOP=0,FWD=1,BACK=2,SL=3,SR=4,TL=5,TR=6,FA=7,FB=8;
+const R={beamA:3,beamAr:1,beamB:6,cdA:2,cdB:4,regen:.05,respawn:80,wallHp:5,flagWait:20};
+let rng = mulberry32(Date.now()&0xffff);
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;
+  let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;
+  return((t^t>>>14)>>>0)/4294967296}}
+
+let terr,wallHp,paint,spawnR=[],spawnB=[],baseR,baseB;
+let P=[],flag,score,tick,me=0;
+
+function parseMap(){
+  terr=[];wallHp=[];paint=[];spawnR=[];spawnB=[];
+  const rows=MAP.split("\n");
+  for(let y=0;y<H;y++){terr.push([]);wallHp.push([]);paint.push([]);
+    for(let x=0;x<W;x++){
+      const c=rows[y][x];let t="floor",hp=0;
+      const border=(x===0||x===W-1||y===0||y===H-1);
+      if(c==="W"||(c==="I"&&border))t="wall";
+      else if(c==="D"){t="dwall";hp=R.wallHp}
+      else if(c==="P"){t="spawnR";spawnR.push([x,y])}
+      else if(c==="Q"){t="spawnB";spawnB.push([x,y])}
+      else if(c==="F"){t="homeR";baseR=[x,y]}
+      else if(c==="G"){t="homeB";baseB=[x,y]}
+      terr[y].push(t);wallHp[y].push(hp);paint[y].push(0);}}
+}
+function solid(x,y){return terr[y][x]==="wall"||(terr[y][x]==="dwall"&&wallHp[y][x]>0)}
+function reset(){
+  parseMap();P=[];score=[0,0];tick=0;
+  flag=[{st:"base",x:baseR[0],y:baseR[1],car:-1,wait:0},
+        {st:"base",x:baseB[0],y:baseB[1],car:-1,wait:0}];
+  const occ=new Set();
+  for(let i=0;i<NP;i++){
+    const team=i%2,pool=team===RED?spawnR:spawnB;
+    let x,y;do{const s=pool[(rng()*pool.length)|0];x=s[0];y=s[1]}while(occ.has(x+","+y));
+    occ.add(x+","+y);
+    P.push({team,x,y,h:(rng()*4)|0,hp:2,resp:0,cdA:0,cdB:0,slow:0,fire:0});}
+  me=0;
+}
+function alive(p){return p.hp>0}
+function capFor(p){const pa=paint[p.y][p.x];
+  return pa===0?2:(pa===p.team+1?3:1)}
+function step(actions){
+  const pr=P.map(()=>rng());               // per-tick priority (the tie-break)
+  P.forEach(p=>{p.fire=0;if(p.cdA>0)p.cdA--;if(p.cdB>0)p.cdB--;if(p.slow>0)p.slow--;
+    if(p.hp===0&&p.resp>0)p.resp--;});
+  // respawn
+  P.forEach(p=>{if(p.hp===0&&p.resp===0){
+    const pool=p.team===RED?spawnR:spawnB;
+    for(const [x,y] of pool){if(!solid(x,y)&&!P.some(q=>alive(q)&&q.x===x&&q.y===y)){
+      p.x=x;p.y=y;p.hp=2;break;}}}});
+  // turns
+  P.forEach((p,i)=>{if(!alive(p))return;const a=actions[i];
+    if(a===TL)p.h=(p.h+3)%4;else if(a===TR)p.h=(p.h+1)%4;});
+  // moves with prio contest
+  const want={};
+  P.forEach((p,i)=>{if(!alive(p)||p.slow>0)return;const a=actions[i];
+    let d=-1;if(a===FWD)d=p.h;else if(a===BACK)d=(p.h+2)%4;
+    else if(a===SL)d=(p.h+3)%4;else if(a===SR)d=(p.h+1)%4;
+    if(d<0)return;const nx=p.x+DX[d],ny=p.y+DY[d];
+    if(nx<0||ny<0||nx>=W||ny>=H||solid(nx,ny))return;
+    if(P.some(q=>alive(q)&&q.x===nx&&q.y===ny))return;
+    const k=nx+","+ny;
+    if(!(k in want)||pr[i]>pr[want[k]])want[k]=i;});
+  for(const k in want){const i=want[k],[nx,ny]=k.split(",").map(Number);
+    const p=P[i];p.x=nx;p.y=ny;
+    if(paint[ny][nx]===(1-p.team)+1)p.slow=1;}
+  // beams
+  const dmg=P.map(()=>0),claims={};
+  P.forEach((p,i)=>{if(!alive(p))return;const a=actions[i];
+    let len=0,rad=0,kind=0;
+    if(a===FA&&p.cdA===0){len=R.beamA;rad=R.beamAr;kind=1;p.cdA=R.cdA}
+    else if(a===FB&&p.cdB===0){len=R.beamB;rad=0;kind=2;p.cdB=R.cdB}
+    if(!kind)return;p.fire=kind;
+    const fx=DX[p.h],fy=DY[p.h],px=-fy,py=fx;
+    for(let l=-rad;l<=rad;l++){
+      for(let d=1;d<=len;d++){
+        const x=p.x+px*l+fx*d,y=p.y+py*l+fy*d;
+        if(x<0||y<0||x>=W||y>=H)break;
+        if(solid(x,y)){if(terr[y][x]==="dwall"&&wallHp[y][x]>0)wallHp[y][x]--;break;}
+        const k=x+","+y;
+        if(!(k in claims)||pr[i]>pr[claims[k]])claims[k]=i;
+        const t=P.findIndex(q=>alive(q)&&q.x===x&&q.y===y&&q.team!==p.team);
+        if(t>=0)dmg[t]++;
+      }}});
+  for(const k in claims){const [x,y]=k.split(",").map(Number);
+    paint[y][x]=P[claims[k]].team+1;}
+  // damage, cap, regen
+  P.forEach((p,i)=>{if(!alive(p))return;
+    p.hp=Math.max(0,p.hp-dmg[i]);
+    if(p.hp>0){const c=capFor(p);p.hp=Math.min(p.hp,c);
+      if(p.hp<c&&rng()<R.regen)p.hp++;}
+    if(p.hp===0){p.resp=R.respawn;
+      flag.forEach(f=>{if(f.st==="carried"&&f.car===i){f.st="dropped";f.x=p.x;f.y=p.y;f.car=-1}});}});
+  // flags
+  flag.forEach((f,t)=>{
+    if(f.st==="base"||f.st==="dropped"){
+      const grab=P.findIndex(q=>alive(q)&&q.x===f.x&&q.y===f.y&&q.team!==t);
+      if(grab>=0){f.st="carried";f.car=grab;}
+      else if(f.st==="dropped"&&P.some(q=>alive(q)&&q.x===f.x&&q.y===f.y&&q.team===t)){
+        f.st="base";[f.x,f.y]=t===RED?baseR:baseB;}}
+    if(f.st==="carried"){const c=P[f.car],home=c.team===RED?"homeR":"homeB";
+      if(terr[c.y][c.x]===home&&flag[c.team].st==="base"){
+        score[c.team]++;f.st="wait";f.car=-1;f.wait=R.flagWait;}}
+    if(f.st==="wait"&&--f.wait<=0){f.st="base";[f.x,f.y]=t===RED?baseR:baseB;}});
+  tick++;
+}
+/* NPC policy: reflex fire + drift toward the enemy flag */
+function npcActions(){
+  return P.map((p,i)=>{
+    if(i===me||!alive(p))return NOOP;
+    const fx=DX[p.h],fy=DY[p.h];
+    for(let d=1;d<=R.beamB;d++){const x=p.x+fx*d,y=p.y+fy*d;
+      if(x<0||y<0||x>=W||y>=H||solid(x,y))break;
+      if(P.some(q=>alive(q)&&q.x===x&&q.y===y&&q.team!==p.team))
+        return p.cdB===0?FB:(p.cdA===0?FA:NOOP);}
+    const r=rng();
+    if(r<.5){const tf=flag[1-p.team],tx=tf.st==="carried"?P[tf.car].x:tf.x,
+      ty=tf.st==="carried"?P[tf.car].y:tf.y;
+      const dx=tx-p.x,dy=ty-p.y;
+      const wd=Math.abs(dx)>Math.abs(dy)?(dx>0?1:3):(dy>0?2:0);
+      if(wd===p.h)return FWD;return ((wd-p.h+4)%4)===1?TR:TL;}
+    if(r<.72)return FWD;if(r<.82)return rng()<.5?TL:TR;
+    if(r<.92)return rng()<.5?FA:FB;return NOOP;});
+}
+/* ---------- canvas renderer (flat theme) ---------- */
+const cv=document.getElementById("cv"),cx=cv.getContext("2d");
+const COL={floor:"#2b2f38",floor2:"#262a32",wall:"#545b6b",dwall:"#8a6a45",dmg:"#6a4a2e",
+  homeR:"#c43454",homeB:"#3466c8",spawnR:"#333a46",spawnB:"#333a46",
+  pR:"#7a2838",pB:"#224276",bR:"#ff5566",bB:"#55aaff",beam:"#ffd9a0",pole:"#d8d8dc"};
+function draw(){
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    let c=COL.floor;const t=terr[y][x];
+    if(t==="wall")c=COL.wall;
+    else if(t==="dwall"&&wallHp[y][x]>0)c=wallHp[y][x]<=2?COL.dmg:COL.dwall;
+    else if(t==="homeR")c=COL.homeR;else if(t==="homeB")c=COL.homeB;
+    else{if((x+y)%2)c=COL.floor2;
+      if(paint[y][x]===1)c=COL.pR;else if(paint[y][x]===2)c=COL.pB;}
+    cx.fillStyle=c;cx.fillRect(x*TILE,y*TILE,TILE,TILE);}
+  P.forEach((p,i)=>{if(p.fire&&alive(p)){
+    const fx=DX[p.h],fy=DY[p.h],len=p.fire===2?R.beamB:R.beamA,rad=p.fire===1?1:0;
+    cx.fillStyle="rgba(255,217,160,.55)";
+    for(let l=-rad;l<=rad;l++)for(let d=1;d<=len;d++){
+      const x=p.x-fy*l+fx*d,y=p.y+fx*l+fy*d;
+      if(x<0||y<0||x>=W||y>=H||solid(x,y))break;
+      cx.fillRect(x*TILE,y*TILE,TILE,TILE);}}});
+  flag.forEach((f,t)=>{if(f.st==="base"||f.st==="dropped"){
+    cx.fillStyle=COL.pole;cx.fillRect(f.x*TILE+6,f.y*TILE+2,2,12);
+    cx.fillStyle=t===RED?COL.bR:COL.bB;cx.fillRect(f.x*TILE+8,f.y*TILE+2,6,5);}});
+  P.forEach((p,i)=>{if(!alive(p))return;
+    cx.fillStyle=p.team===RED?COL.bR:COL.bB;
+    cx.beginPath();cx.arc(p.x*TILE+8,p.y*TILE+8,6,0,7);cx.fill();
+    if(i===me){cx.strokeStyle="#fff";cx.lineWidth=1.5;cx.stroke();}
+    cx.fillStyle="#fff";
+    cx.fillRect(p.x*TILE+7+DX[p.h]*5,p.y*TILE+7+DY[p.h]*5,3,3);
+    cx.fillStyle="#78fa96";
+    for(let k=0;k<p.hp;k++)cx.fillRect(p.x*TILE+3+k*4,p.y*TILE-1,3,2);
+    flag.forEach(f=>{if(f.st==="carried"&&f.car===i){
+      cx.fillStyle=COL.pole;cx.fillRect(p.x*TILE+12,p.y*TILE-2,2,7);}});});
+}
+/* ---------- loop / input / optional model-server mode ---------- */
+let humanAct=NOOP,ws=null;
+const KEY={w:FWD,s:BACK,a:SL,d:SR,q:TL,e:TR,j:FA,k:FB," ":FA};
+document.addEventListener("keydown",ev=>{
+  const a=KEY[ev.key.toLowerCase()];if(a===undefined)return;ev.preventDefault();
+  if(ws&&ws.readyState===1){
+    const names=["noop","fwd","back","strafeL","strafeR","turnL","turnR","fireA","fireB"];
+    ws.send(JSON.stringify({type:"action",name:names[a]}));
+  } else humanAct=a;});
+document.getElementById("b_reset").onclick=()=>{if(!ws)reset()};
+document.getElementById("b_conn").onclick=()=>{
+  const url=document.getElementById("ws_url").value;
+  try{ws=new WebSocket(url)}catch(e){alert(e);return}
+  ws.onopen=()=>{document.getElementById("modelabel").textContent=
+    "WORLD MODEL server (learned dynamics)";};
+  ws.onclose=()=>{ws=null;document.getElementById("modelabel").textContent=
+    "local engine (ground-truth physics)";};
+  ws.onmessage=ev=>{const f=JSON.parse(ev.data);
+    if(f.panes&&f.panes.spec_learnedworld){
+      const img=new Image();
+      img.onload=()=>{cx.drawImage(img,0,0,cv.width,cv.height)};
+      img.src="data:image/jpeg;base64,"+f.panes.spec_learnedworld;
+      const h=f.hud;
+      document.getElementById("h_tick").textContent=h.tick;
+      document.getElementById("h_sr").textContent=h.score[0];
+      document.getElementById("h_sb").textContent=h.score[1];
+      const m=f.me||{};
+      document.getElementById("h_me").textContent=m.slot>=0?("P"+m.slot):"spectator";
+      document.getElementById("h_hp").textContent=m.alive?"♥".repeat(m.hp||0):"…";
+      document.getElementById("h_fr").textContent=h.flag_r;
+      document.getElementById("h_fb").textContent=h.flag_b;}};
+};
+reset();
+setInterval(()=>{
+  if(ws)return;                       // server mode: frames come over WS
+  const acts=npcActions();acts[me]=humanAct;humanAct=NOOP;
+  step(acts);draw();
+  document.getElementById("h_tick").textContent=tick;
+  document.getElementById("h_sr").textContent=score[0];
+  document.getElementById("h_sb").textContent=score[1];
+  document.getElementById("h_me").textContent="P"+me+" (red)";
+  const p=P[me];
+  document.getElementById("h_hp").textContent=alive(p)?"♥".repeat(p.hp):("respawn "+p.resp);
+  document.getElementById("h_fr").textContent=flag[0].st;
+  document.getElementById("h_fb").textContent=flag[1].st;
+},140);
+</script>
+</body>
+</html>
