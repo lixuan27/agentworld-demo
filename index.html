@@ -98,8 +98,12 @@ extrapolation with no cliff.</p>
 <p>Final-recipe headline (3 random seeds, matched cells vs the faithful reproduction):
 position accuracy <b>0.845 ± 0.009</b> (baseline 0.700), death Event-F1
 <b>0.747 ± 0.039</b> (baseline 0.329), and single-step joint-contradiction rate
-<b>exactly zero</b> on every cell — the curriculum solved one-step joint coherence.
-Long-horizon cumulative contradictions on mid-size arenas remain the stated open frontier.</p>
+<b>exactly zero on the small and mid arenas</b> across all three seeds (0.03 ± 0.02
+overall; one tiny-arena cell retains a residue) — the curriculum essentially solved
+one-step joint coherence. Long-horizon cumulative contradictions remain the stated open
+frontier. The same single intervention also protects extreme population extrapolation:
+at 128 players (16× the training population) the curriculum-trained model answers 80% of
+positions where plain long training collapses to 66–74%.</p>
 <div class="card">
 <p><b class="ok">The defect we set out to show is real.</b> With per-player position accuracy at
 1.000, the assembled state still contradicts itself on 17–50% of ticks (two players on one
