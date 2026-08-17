@@ -181,7 +181,14 @@ honest split verdict:</p>
 <tr><th></th><th>H=32</th><th>H=128</th><th>death Event-F1</th><th>identity (X-view)</th></tr>
 <tr><td>typed engine (5.3M)</td><td>0.89–0.92</td><td>0.36–0.39</td><td><b>0.41–0.83</b></td><td><b>yes</b></td></tr>
 <tr><td>dense U-Net (3.4M)</td><td><b>0.90–0.96</b></td><td><b>0.80–0.83</b></td><td>0.07–0.40</td><td>structurally impossible</td></tr>
+<tr><td>per-view video (8.5M)</td><td>0.57</td><td>—</td><td>—</td><td>X-view 0.21</td></tr>
+<tr><td>shared-latent video (10.9M)</td><td>0.60</td><td>—</td><td>—</td><td>X-view 0.25</td></tr>
 </table>
+<p class="cap">X-view = cross-view inconsistency of the parsed overlap between two players'
+cameras (typed models are exactly 0 by construction — every view decodes from ONE state).
+The pooled shared latent does not repair it: an unstructured latent cannot enforce view
+consistency the way an authoritative state does. Both video baselines trained on the same
+corpus and budget; full four-carrier table lands with the paper.</p>
 <p><b>At long horizon the dense carrier wins raw occupancy</b> — typed autoregressive errors
 accumulate as identity displacement, while dense predicts each cell independently so the
 pattern stays put. But the typed carrier keeps everything a multiplayer <i>server</i>
