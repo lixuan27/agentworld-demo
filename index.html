@@ -207,7 +207,36 @@ state (respawn timers, cooldowns), and addressable queries. The original paper's
 numbers (dense Pos = 0.002) undersold this baseline badly; our table reports what each
 carrier is genuinely good at.</p>
 
-<h2>8 · Play inside the model — multiplayer</h2>
+
+<h2>8 · Beyond the arena — Push-T, a standard world-model benchmark</h2>
+<p>To answer "does any of this generalise?", we took the same record-wise engine to
+<b>Push-T</b> — the contact-rich manipulation benchmark from the Diffusion Policy line —
+with a <b>~100-line schema file as the entire domain adaptation</b> (two typed records,
+continuous coordinates on the same digit machinery; backbone, training loop, type-only
+masks and never-repair rollout unchanged). The environment is our reimplementation,
+<b>verified bit-exact</b> against the official physics: replaying official human-demo
+action sequences reproduces the recorded trajectories to 10⁻⁵ px over 100 steps.</p>
+<table>
+<tr><th></th><th>H=1</th><th>H=16</th></tr>
+<tr><td>block position error (px)</td><td><b>1.15</b> (≈ quantisation floor)</td><td>9.4</td></tr>
+<tr><td>block angle error (rad)</td><td>0.009</td><td>0.14</td></tr>
+</table>
+<p>Then the real test: <b>MPPI planning through the learned model</b>, executed in the
+real environment. Iterated with one variable at a time — a naive planner failed even with
+true physics (planner's fault, proven by the oracle arm); adding approach shaping and
+cost-annealed noise lifted the true-physics oracle to 0.581 mean max coverage; a finer
+codec (0.125 px) closed the model's share of the gap:</p>
+<table>
+<tr><th>rollouts inside</th><th>mean max coverage</th></tr>
+<tr><td>random actions (floor)</td><td>0.119</td></tr>
+<tr><td><b>the learned model</b></td><td><b>0.415 — 71% of oracle</b></td></tr>
+<tr><td>true physics (planner ceiling)</td><td>0.581</td></tr>
+</table>
+<p class="cap">Honest framing: the MPPI ceiling itself is modest (imitation-learned
+policies reach ~0.84 on this task — a different question than planning through a world
+model). The claim is the 71% recovery and the one-file domain transfer.</p>
+
+<h2>9 · Play inside the model — multiplayer</h2>
 <p>The live demo is a FastAPI + WebSocket server on a GPU node. <b>Every browser that connects
 claims its own player</b> (teams auto-balanced); all human keypresses merge into one joint
 action, the <b>learned model advances the world once per tick</b>, and every seated player's
@@ -222,7 +251,7 @@ ssh -L 8777:&lt;node&gt;:8777 &lt;cluster&gt;         # then open http://localho
 <p class="cap">WASD move · Q/E turn · J wide beam · K long beam · touch controls on mobile · live event feed (eliminations, flag steals, scoring) derived from the model's own state deltas. Worlds from the official
 23×23 Melting Pot arena up to 72×72; per-tick model latency 0.25–0.5 s on one (shared) H200. World selector includes CTF, King-of-the-Hill, and the new <b>Nomad</b> rule set — a moving hill whose position and hold-counter are part of the typed state itself, so the model must predict the evolution of the <i>rules' state</i>, not just the pieces (multi-game brain for Nomad currently training).</p>
 
-<h2>9 · Method in one paragraph</h2>
+<h2>10 · Method in one paragraph</h2>
 <p>A schema declares typed records (players, flags, 8×8 terrain chunks, global). Each tick,
 a decoder-only Transformer (width 256, 6 layers) predicts every record's next state from its
 own fields, a local context window that includes visible agents' <i>actions and tie-break
