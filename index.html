@@ -147,8 +147,18 @@ the project — and extrapolates to populations it never saw (trained at N ≤ 8
 per-game-weights design of the original cannot express.
 <span class="dim">Open weakness, kept honest: cumulative joint-contradiction rate over very
 long horizons (H = 128) remains the frontier.</span></p>
-<p>The live server below now runs this multi-game checkpoint: pick a KotH world in the
-world selector and you are playing King of the Hill <i>inside the learned model</i>.</p>
+<p><b>Round-4 extends this to a third game and completes the population story.</b>
+Nomad — a moving hill that must be held for 16 consecutive ticks, whereupon it relocates —
+puts the <i>rules' own state</i> (hill position, hold counter) inside the typed state: the
+model tracks the hill through 128 autoregressive steps with 75–100% accuracy while ALSO
+improving on the two-game model at its games (position 0.844 vs 0.818, death F1 0.750 vs
+0.656). And the population-diverse arm <b>cures the extrapolation collapse outright</b>:
+trained at ≤64 players, it answers <b>93% of positions at 1024 players</b> (the collapsed
+long-training arms: 27–36%; the previous best: 77%) at an in-distribution cost of ~1%.
+The extrapolation narrative closes in three acts: long training collapses it, the
+interaction curriculum mitigates it, population-diverse data cures it.</p>
+<p>The live server now runs this final checkpoint — one 5.3M model carrying all three
+games; pick a Nomad world and watch the hill migrate <i>inside the learned model</i>.</p>
 
 
 <h2>6 · What scale buys — and what it doesn't</h2>
