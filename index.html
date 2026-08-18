@@ -314,13 +314,16 @@ autoregressive steps the state carrier loses 0.3–2.6 dB; the pixel carrier los
 and in two games ends below 12 dB — a destroyed image. Errors in a 128-byte typed state stay
 low-dimensional and type-constrained; errors in a 25,000-dimensional frame have nothing
 holding them to a legal world.</p>
-<p class="cap"><b>Three caveats we hold onto.</b> (i) The pixel carrier <i>wins</i> at
-H ≤ 4 in every game — refining the frame you were just given is easy, and our short-horizon
-quality is capped by the renderer (state-carrier PSNR at H=1 equals the renderer's own
-ceiling, so the dynamics is near-perfect there and the pixels are the bottleneck).
-(ii) At H=64 the state carrier beats the repeat-the-first-frame floor in 3 of 4 games; in
-Ms. Pac-Man, with five independently moving entities, it merely matches that floor —
-neither carrier is useful that far out, though the pixel carrier is far below it.
+<p class="cap"><b>Three caveats we hold onto.</b> (i) At short horizon the state route is not merely
+second — it is <b>below the repeat-the-first-frame floor in all four games at H=1</b>
+(e.g. Breakout 31.1 vs 34.3), because our renderer's reconstruction error is larger than
+one frame of motion. Its H=1 PSNR sits exactly at the renderer's own ceiling, so the
+dynamics there is near-perfect and the pixels are entirely the bottleneck; the pixel
+carrier wins H ≤ 4 everywhere.
+(ii) At H=64 the state carrier is above that floor in 3 of 4 games (Pong +2.0,
+Freeway +2.7, Breakout +0.4 dB); in Ms. Pac-Man, with five independently moving entities,
+it is 0.1 dB <i>below</i> it — neither carrier is useful that far out, though the pixel
+carrier is 5.9 dB below the floor.
 (iii) A better renderer lifts the whole state curve, so this ceiling is engineering, not
 architecture.</p>
 
