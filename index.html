@@ -286,7 +286,45 @@ kind that worked on Push-T), and only after that does model fidelity become the 
 constraint again. Planning through a learned world model transfers today to the
 single-agent, low-branching regime; multi-agent contested lookahead is open.</p>
 
-<h2>11 · Play inside the model — multiplayer</h2>
+
+<h2>11 · Atari: the two carriers cross over</h2>
+<p>The broadest test of the thesis so far, on the most standard action-conditioned
+world-model setting there is. An Atari emulator's <b>128-byte RAM is the authoritative
+state</b> and the screen is a deterministic function of it — exactly the split this project
+argues for. So we ran both carriers on the same corpus, same actions, same never-repair
+rollout, at matched parameter budget:</p>
+<ul>
+<li><b>state carrier</b> — predict the RAM (one typed record per byte, 5M), then decode
+pixels from it with a RAM→frame renderer (4.5M)</li>
+<li><b>pixel carrier</b> — predict the next frame directly from (frame, action), 9.4M</li>
+</ul>
+<table>
+<tr><th>PSNR (dB)</th><th>H=1</th><th>H=4</th><th>H=16</th><th>H=64</th></tr>
+<tr><td>Ms. Pac-Man — state</td><td>27.3</td><td>26.9</td><td><b>26.5</b></td><td><b>24.7</b></td></tr>
+<tr><td>Ms. Pac-Man — pixel</td><td><b>30.9</b></td><td><b>28.3</b></td><td>25.1</td><td>18.9</td></tr>
+<tr><td>Breakout — state</td><td>31.1</td><td>31.1</td><td><b>30.6</b></td><td><b>28.4</b></td></tr>
+<tr><td>Breakout — pixel</td><td><b>39.8</b></td><td><b>36.9</b></td><td>11.9</td><td>10.6</td></tr>
+<tr><td>Freeway — state</td><td>27.4</td><td>27.4</td><td><b>27.0</b></td><td><b>27.1</b></td></tr>
+<tr><td>Freeway — pixel</td><td><b>32.5</b></td><td><b>28.7</b></td><td>18.4</td><td>11.5</td></tr>
+<tr><td>Pong — state</td><td>35.1</td><td>34.7</td><td><b>34.1</b></td><td><b>33.5</b></td></tr>
+<tr><td>Pong — pixel</td><td><b>38.4</b></td><td><b>35.1</b></td><td>33.6</td><td>32.5</td></tr>
+</table>
+<p><b>The crossover lands between 4 and 16 steps in all four games.</b> Over 64
+autoregressive steps the state carrier loses 0.3–2.6 dB; the pixel carrier loses 5.9–29.2 dB
+and in two games ends below 12 dB — a destroyed image. Errors in a 128-byte typed state stay
+low-dimensional and type-constrained; errors in a 25,000-dimensional frame have nothing
+holding them to a legal world.</p>
+<p class="cap"><b>Three caveats we hold onto.</b> (i) The pixel carrier <i>wins</i> at
+H ≤ 4 in every game — refining the frame you were just given is easy, and our short-horizon
+quality is capped by the renderer (state-carrier PSNR at H=1 equals the renderer's own
+ceiling, so the dynamics is near-perfect there and the pixels are the bottleneck).
+(ii) At H=64 the state carrier beats the repeat-the-first-frame floor in 3 of 4 games; in
+Ms. Pac-Man, with five independently moving entities, it merely matches that floor —
+neither carrier is useful that far out, though the pixel carrier is far below it.
+(iii) A better renderer lifts the whole state curve, so this ceiling is engineering, not
+architecture.</p>
+
+<h2>12 · Play inside the model — multiplayer</h2>
 <p>The live demo is a FastAPI + WebSocket server on a GPU node. <b>Every browser that connects
 claims its own player</b> (teams auto-balanced); all human keypresses merge into one joint
 action, the <b>learned model advances the world once per tick</b>, and every seated player's
@@ -301,7 +339,7 @@ ssh -L 8777:&lt;node&gt;:8777 &lt;cluster&gt;         # then open http://localho
 <p class="cap">WASD move · Q/E turn · J wide beam · K long beam · touch controls on mobile · live event feed (eliminations, flag steals, scoring) derived from the model's own state deltas. Worlds from the official
 23×23 Melting Pot arena up to 72×72; per-tick model latency 0.25–0.5 s on one (shared) H200. World selector includes CTF, King-of-the-Hill, and the new <b>Nomad</b> rule set — a moving hill whose position and hold-counter are part of the typed state itself, so the model must predict the evolution of the <i>rules' state</i>, not just the pieces (multi-game brain for Nomad currently training).</p>
 
-<h2>12 · Method in one paragraph</h2>
+<h2>13 · Method in one paragraph</h2>
 <p>A schema declares typed records (players, flags, 8×8 terrain chunks, global). Each tick,
 a decoder-only Transformer (width 256, 6 layers) predicts every record's next state from its
 own fields, a local context window that includes visible agents' <i>actions and tie-break
