@@ -236,7 +236,36 @@ codec (0.125 px) closed the model's share of the gap:</p>
 policies reach ~0.84 on this task — a different question than planning through a world
 model). The claim is the 71% recovery and the one-file domain transfer.</p>
 
-<h2>9 · Play inside the model — multiplayer</h2>
+
+<h2>9 · Can it be a real server? Interest management and stalls</h2>
+<p>A production game server does not ship every client the whole world — it applies
+<b>interest management</b>, and clients keep playing through network stalls by predicting
+locally. We ran the deployed checkpoint <i>as a client</i> (no retraining) to ask whether a
+learned world model can support those two mechanics.</p>
+<p><b>Interest management is lossless.</b> Filter the roster to a radius-R interest set, run
+the same model on that partial state, and the prediction for every visible entity is
+<b>bit-identical to the server's</b> — 100% of trials, at every radius tested. Our
+population-invariance result (predictions are exactly unchanged by entities outside the
+influence radius) predicts this; here it is verified rather than assumed. A client can be
+handed a cropped world and still be in the same world.</p>
+<p><b>Stall prediction works, and its error decomposes cleanly.</b> Mean position error on
+the visible set after an 8-tick stall (≈2 s at the demo's tick rate):</p>
+<table>
+<tr><th>what the client assumes about other agents</th><th>error (tiles)</th></tr>
+<tr><td>a plausible but <i>wrong</i> opponent model</td><td>2.21 <span class="warn">(worse than doing nothing)</span></td></tr>
+<tr><td>hold last state (freeze baseline)</td><td>2.00</td></tr>
+<tr><td>linear extrapolation (dead-reckon baseline)</td><td>3.88</td></tr>
+<tr><td>assume everyone stands still</td><td>1.02</td></tr>
+<tr><td><b>correct opponent policy, unsynced randomness</b></td><td><b>0.75</b></td></tr>
+<tr><td>true joint actions (dynamics-fidelity ceiling)</td><td>0.02</td></tr>
+</table>
+<p>Two things fall out. First, <b>an action prior helps only if it is calibrated</b> —
+confidently wrong motion is worse than no motion, the same reason dead-reckoning loses to
+freezing here. Second, of the deployable client's 0.75 tiles, the <b>world model contributes
+0.02</b>; the rest is opponents' unsynced random draws. The model is not the bottleneck for
+client-side prediction — which is precisely the property a learned <i>server</i> needs.</p>
+
+<h2>10 · Play inside the model — multiplayer</h2>
 <p>The live demo is a FastAPI + WebSocket server on a GPU node. <b>Every browser that connects
 claims its own player</b> (teams auto-balanced); all human keypresses merge into one joint
 action, the <b>learned model advances the world once per tick</b>, and every seated player's
@@ -251,7 +280,7 @@ ssh -L 8777:&lt;node&gt;:8777 &lt;cluster&gt;         # then open http://localho
 <p class="cap">WASD move · Q/E turn · J wide beam · K long beam · touch controls on mobile · live event feed (eliminations, flag steals, scoring) derived from the model's own state deltas. Worlds from the official
 23×23 Melting Pot arena up to 72×72; per-tick model latency 0.25–0.5 s on one (shared) H200. World selector includes CTF, King-of-the-Hill, and the new <b>Nomad</b> rule set — a moving hill whose position and hold-counter are part of the typed state itself, so the model must predict the evolution of the <i>rules' state</i>, not just the pieces (multi-game brain for Nomad currently training).</p>
 
-<h2>10 · Method in one paragraph</h2>
+<h2>11 · Method in one paragraph</h2>
 <p>A schema declares typed records (players, flags, 8×8 terrain chunks, global). Each tick,
 a decoder-only Transformer (width 256, 6 layers) predicts every record's next state from its
 own fields, a local context window that includes visible agents' <i>actions and tie-break
